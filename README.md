@@ -25,6 +25,9 @@
 
 ## Screenshots
 
+### Dashboard Webcam Detection
+![Dashboard Detection](screenshots/dashboard.png)
+
 ### Live Webcam Detection
 ![Webcam Detection](screenshots/webcam.png)
 
