@@ -2,23 +2,33 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 
-# Virtual Environment
+# Virtual Environments
 venv/
 env/
 .venv/
 
-# Environment variables
+# Environment Variables
 .env
 .env.*
 
-# Generated output
+# Generated Output
 output/*
 !output/.gitkeep
 
 # Cache
 .cache/
 .streamlit/secrets.toml
+
+# Model Training & Experiment Logs
+runs/
+wandb/
+*.log
+
+# Temporary Files
+*.tmp
+*.temp
 
 # IDE
 .vscode/
@@ -27,3 +37,4 @@ output/*
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
