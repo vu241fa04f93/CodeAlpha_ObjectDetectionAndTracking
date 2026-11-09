@@ -23,6 +23,17 @@
 
 ---
 
+## Screenshots
+
+### Live Webcam Detection
+![Webcam Detection](screenshots/webcam.png)
+
+### Video Upload Detection
+![Video Detection](screenshots/video.png)
+
+### Object Tracking
+![Object Tracking](screenshots/tracking.png)
+
 ## 📌 Overview
 
 **OBJECT VISION** is an intelligent real-time object detection and multi-object tracking application built using Python, OpenCV, Ultralytics YOLOv8, and the SORT (Simple Online and Realtime Tracking) algorithm.
