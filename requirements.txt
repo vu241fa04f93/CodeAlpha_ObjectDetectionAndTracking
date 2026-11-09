@@ -1,23 +1,10 @@
-# Object Detection
+streamlit>=1.28.0
 ultralytics>=8.0.0
-
-# Deep Learning
+opencv-python-headless>=4.8.0
 torch>=2.0.0
 torchvision>=0.15.0
-
-# Computer Vision
-opencv-python-headless>=4.8.0
-
-# Web Application
-streamlit>=1.28.0
-
-# Numerical Computing
 numpy>=1.24.0
 pandas>=2.0.0
 scipy>=1.10.0
-
-# Object Tracking
 filterpy>=1.4.5
-
-# Visualization
 matplotlib>=3.7.0
