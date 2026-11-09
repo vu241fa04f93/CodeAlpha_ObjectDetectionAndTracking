@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import threading
+from collections import deque
 from pathlib import Path
 
 import av
@@ -322,6 +323,24 @@ class WebcamProcessor:
             iou_threshold=iou_thresh
         )
         self.lock = threading.Lock()
+        self._frame_times = deque(maxlen=60)
+        self._metrics = {
+            "fps": 0.0,
+            "active_tracks": 0,
+            "unique_objects": 0,
+            "inference_ms": 0.0,
+            "resolution": "-",
+            "classes": {},
+            "frames": 0,
+        }
+
+    def snapshot(self):
+        """Return a thread-safe copy of the latest webcam metrics."""
+        with self.lock:
+            return {
+                **self._metrics,
+                "classes": {name: list(ids) for name, ids in self._metrics["classes"].items()},
+            }
 
     def process(self, frame: av.VideoFrame) -> av.VideoFrame:
         # WebRTC callbacks run outside Streamlit's script thread. Do not call
@@ -333,6 +352,7 @@ class WebcamProcessor:
             run_detection = (self.frame_counter == 1 or
                              self.frame_counter % self.frame_skip == 0)
             inference_ms = 0.0
+            frame_started = time.perf_counter()
 
             if run_detection:
                 detections, inference_ms = self.detector.detect(
@@ -354,6 +374,31 @@ class WebcamProcessor:
                     class_names_map=self.detector.names
                 )
 
+            now = time.perf_counter()
+            self._frame_times.append(now)
+            if len(self._frame_times) > 1:
+                elapsed = self._frame_times[-1] - self._frame_times[0]
+                fps = (len(self._frame_times) - 1) / elapsed if elapsed > 0 else 0.0
+            else:
+                fps = 0.0
+
+            class_map = {}
+            for obj in tracked:
+                class_name = str(obj.class_name).upper()
+                class_map.setdefault(class_name, []).append(f"#{int(obj.track_id):02d}")
+
+            # Publish metrics while still holding the processor lock.
+            self._metrics = {
+                "fps": fps,
+                "active_tracks": len(tracked),
+                "unique_objects": int(self.tracker.total_unique_objects),
+                "inference_ms": float(inference_ms) if run_detection else self._metrics["inference_ms"],
+                "resolution": f"{processed.shape[1]}x{processed.shape[0]}",
+                "classes": class_map,
+                "frames": self.frame_counter,
+                "processing_ms": (time.perf_counter() - frame_started) * 1000.0,
+            }
+
             output = draw_bounding_boxes(
                 processed,
                 tracked_objects=tracked,
@@ -362,7 +407,7 @@ class WebcamProcessor:
             if self.show_hud_banner:
                 output = draw_tracking_hud(
                     output,
-                    fps=0.0,
+                    fps=fps,
                     active_tracks=len(tracked),
                     total_unique=self.tracker.total_unique_objects,
                     is_detection_frame=run_detection,
@@ -701,6 +746,53 @@ if source_type == "Webcam":
             )
         if not webrtc_ctx.state.playing:
             st.caption("Camera is currently stopped. Press START in the video panel to begin detection and tracking.")
+
+        # Streamlit fragments refresh the dashboard independently while WebRTC
+        # processes frames on its worker thread. This keeps the UI responsive.
+        @st.fragment(run_every=1)
+        def refresh_webcam_dashboard():
+            metrics = st.session_state.webcam_processor.snapshot()
+
+            def render_metric(holder, title, value, subtitle, icon):
+                holder.markdown(f"""
+                <div class=\"metric-card-box\">
+                    <div class=\"metric-header\"><span class=\"metric-title\">{title}</span><span class=\"metric-icon\">{icon}</span></div>
+                    <div class=\"metric-value\">{value}</div>
+                    <div class=\"metric-subtitle\">{subtitle}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            render_metric(c1_holder, "LIVE FPS", f"{metrics['fps']:.1f}", "Browser camera processing rate", "⚡")
+            render_metric(c2_holder, "ACTIVE TRACKS", str(metrics["active_tracks"]), "Currently in field of view", "🎯")
+            render_metric(c3_holder, "UNIQUE OBJECTS", str(metrics["unique_objects"]), "Session cumulative count", "🔢")
+            render_metric(c4_holder, "INFERENCE LATENCY", f"{metrics['inference_ms']:.1f} ms", "Latest YOLO forward pass", "⏱️")
+
+            if metrics["classes"]:
+                rows = "".join(
+                    f"<tr><td><strong>{name}</strong></td><td>{len(ids)}</td><td>{', '.join(ids)}</td></tr>"
+                    for name, ids in sorted(metrics["classes"].items())
+                )
+            else:
+                rows = '<tr><td colspan=\"3\" style=\"text-align:center;color:#94A3B8;\">No objects detected in current frame.</td></tr>'
+
+            table_placeholder.markdown(f"""
+            <table class=\"styled-table\">
+                <thead><tr><th>Object Class</th><th>Count</th><th>Tracking IDs</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+            """, unsafe_allow_html=True)
+
+            perf_placeholder.markdown(f"""
+            <div class=\"info-bar\">
+                <div>Average FPS: <strong>{metrics['fps']:.1f} FPS</strong></div>
+                <div>YOLO Latency: <strong>{metrics['inference_ms']:.1f} ms</strong></div>
+                <div>Processing Resolution: <strong>{metrics['resolution']}</strong></div>
+                <div>Current Model: <strong>{model_selection.split('(')[0].strip()}</strong></div>
+                <div>Compute Device: <strong>{device_name}</strong></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        refresh_webcam_dashboard()
     except Exception as e:
         st.error(f"Webcam initialization failed: {e}")
         st.info(

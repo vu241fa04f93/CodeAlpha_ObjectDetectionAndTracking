@@ -1,40 +1,63 @@
+# ==============================
 # Python
+# ==============================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.egg-info/
 
+# ==============================
 # Virtual Environments
+# ==============================
 venv/
 env/
 .venv/
 
-# Environment Variables
+# ==============================
+# Environment Variables & Secrets
+# ==============================
 .env
 .env.*
+!.env.example
 
+.streamlit/secrets.toml
+
+# ==============================
 # Generated Output
+# ==============================
 output/*
 !output/.gitkeep
 
+# ==============================
 # Cache
+# ==============================
 .cache/
-.streamlit/secrets.toml
+.pytest_cache/
+.mypy_cache/
 
+# ==============================
 # Model Training & Experiment Logs
+# ==============================
 runs/
 wandb/
 *.log
 
+# ==============================
 # Temporary Files
+# ==============================
 *.tmp
 *.temp
 
+# ==============================
 # IDE
+# ==============================
 .vscode/
 .idea/
 
+# ==============================
 # OS
+# ==============================
 .DS_Store
 Thumbs.db
 desktop.ini
