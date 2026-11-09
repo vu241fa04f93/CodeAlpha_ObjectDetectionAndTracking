@@ -9,7 +9,11 @@ import os
 import sys
 import tempfile
 import time
+import threading
 from pathlib import Path
+
+import av
+from streamlit_webrtc import webrtc_streamer
 
 import cv2
 import numpy as np
@@ -297,6 +301,76 @@ def get_cached_detector(model_file_path: str) -> YOLOv8Detector:
     return YOLOv8Detector(model_name_or_path=model_file_path, device=device)
 
 
+class WebcamProcessor:
+    """Processes frames received directly from the visitor's browser camera."""
+
+    def __init__(self, detector, conf_threshold, img_size, selected_classes,
+                 frame_skip, target_width, show_motion_trails, show_hud_banner,
+                 max_age, min_hits, iou_thresh):
+        self.detector = detector
+        self.conf_threshold = conf_threshold
+        self.img_size = img_size
+        self.selected_classes = selected_classes
+        self.frame_skip = max(1, int(frame_skip))
+        self.target_width = target_width
+        self.show_motion_trails = show_motion_trails
+        self.show_hud_banner = show_hud_banner
+        self.frame_counter = 0
+        self.tracker = ObjectTracker(
+            max_age=max_age,
+            min_hits=min_hits,
+            iou_threshold=iou_thresh
+        )
+        self.lock = threading.Lock()
+
+    def process(self, frame: av.VideoFrame) -> av.VideoFrame:
+        # WebRTC callbacks run outside Streamlit's script thread. Do not call
+        # Streamlit UI/session-state APIs from this method.
+        with self.lock:
+            image = frame.to_ndarray(format="bgr24")
+            self.frame_counter += 1
+            processed = resize_frame(image, target_width=self.target_width)
+            run_detection = (self.frame_counter == 1 or
+                             self.frame_counter % self.frame_skip == 0)
+            inference_ms = 0.0
+
+            if run_detection:
+                detections, inference_ms = self.detector.detect(
+                    frame=processed,
+                    conf_threshold=self.conf_threshold,
+                    iou_threshold=DEFAULT_NMS_IOU_THRESHOLD,
+                    img_size=self.img_size,
+                    selected_classes=self.selected_classes
+                )
+                tracked = self.tracker.process_frame(
+                    detections=detections,
+                    is_detection_frame=True,
+                    class_names_map=self.detector.names
+                )
+            else:
+                tracked = self.tracker.process_frame(
+                    detections=np.empty((0, 6)),
+                    is_detection_frame=False,
+                    class_names_map=self.detector.names
+                )
+
+            output = draw_bounding_boxes(
+                processed,
+                tracked_objects=tracked,
+                show_trajectories=self.show_motion_trails
+            )
+            if self.show_hud_banner:
+                output = draw_tracking_hud(
+                    output,
+                    fps=0.0,
+                    active_tracks=len(tracked),
+                    total_unique=self.tracker.total_unique_objects,
+                    is_detection_frame=run_detection,
+                    inference_ms=inference_ms
+                )
+            return av.VideoFrame.from_ndarray(output, format="bgr24")
+
+
 # -----------------------------------------------------------------------------
 # Session State Initialization
 # -----------------------------------------------------------------------------
@@ -327,7 +401,7 @@ with st.sidebar:
         video_path = None
         webcam_index = 0
         if source_type == "Webcam":
-            webcam_index = st.number_input("Camera Index", min_value=0, max_value=5, value=0, step=1)
+            st.caption("Uses your browser camera. Click START below and allow camera permission.")
         elif source_type == "Upload Video":
             uploaded_file = st.file_uploader("Choose Video", type=["mp4", "avi", "mov", "mkv"])
             if uploaded_file is not None:
@@ -424,19 +498,34 @@ st.markdown(f"""
 
 
 # -----------------------------------------------------------------------------
-# Controls Row: Start, Pause, Resume, Stop in one row
+# Controls Row
+# Browser webcam uses the WebRTC component's own Start/Stop controls.
+# Uploaded/sample videos keep the original Start/Pause/Stop controls.
 # -----------------------------------------------------------------------------
-ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([1, 1, 1, 4])
+btn_start = False
+btn_pause = False
+btn_stop = False
 
-with ctrl_c1:
-    btn_start = st.button("Start", use_container_width=True, type="primary", disabled=st.session_state.is_running and not st.session_state.is_paused)
-
-with ctrl_c2:
-    pause_label = "Resume" if st.session_state.is_paused else "Pause"
-    btn_pause = st.button(pause_label, use_container_width=True, disabled=not st.session_state.is_running)
-
-with ctrl_c3:
-    btn_stop = st.button("Stop", use_container_width=True, disabled=not st.session_state.is_running)
+if source_type != "Webcam":
+    ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([1, 1, 1, 4])
+    with ctrl_c1:
+        btn_start = st.button(
+            "Start", use_container_width=True, type="primary",
+            disabled=st.session_state.is_running and not st.session_state.is_paused
+        )
+    with ctrl_c2:
+        pause_label = "Resume" if st.session_state.is_paused else "Pause"
+        btn_pause = st.button(
+            pause_label, use_container_width=True,
+            disabled=not st.session_state.is_running
+        )
+    with ctrl_c3:
+        btn_stop = st.button(
+            "Stop", use_container_width=True,
+            disabled=not st.session_state.is_running
+        )
+else:
+    st.info("Browser webcam mode: use the START button inside the camera panel. Your browser will ask for camera permission.")
 
 st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
@@ -539,6 +628,56 @@ perf_placeholder.markdown(f"""
 
 
 # -----------------------------------------------------------------------------
+# Browser Webcam (WebRTC)
+# -----------------------------------------------------------------------------
+if source_type == "Webcam":
+    st.markdown('<div class="section-title">Live Browser Camera</div>', unsafe_allow_html=True)
+    try:
+        webcam_detector = get_cached_detector(selected_model_path)
+
+        # Keep one processor per browser session and settings combination.
+        # This prevents the tracker/IDs from resetting on ordinary Streamlit reruns.
+        processor_key = (
+            selected_model_path, conf_threshold, img_size,
+            tuple(selected_classes) if selected_classes is not None else None,
+            frame_skip, target_width, show_motion_trails, show_hud_banner,
+            max_age, min_hits, iou_thresh
+        )
+        if ("webcam_processor" not in st.session_state or
+                st.session_state.get("webcam_processor_key") != processor_key):
+            st.session_state.webcam_processor = WebcamProcessor(
+                detector=webcam_detector,
+                conf_threshold=conf_threshold,
+                img_size=img_size,
+                selected_classes=selected_classes,
+                frame_skip=frame_skip,
+                target_width=target_width,
+                show_motion_trails=show_motion_trails,
+                show_hud_banner=show_hud_banner,
+                max_age=max_age,
+                min_hits=min_hits,
+                iou_thresh=iou_thresh
+            )
+            st.session_state.webcam_processor_key = processor_key
+
+        with st.container():
+            webrtc_ctx = webrtc_streamer(
+                key="object-vision-browser-webcam",
+                video_frame_callback=st.session_state.webcam_processor.process,
+                media_stream_constraints={"video": True, "audio": False},
+                rtc_configuration={
+                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+                },
+                async_processing=True
+            )
+        if not webrtc_ctx.state.playing:
+            st.caption("Camera is currently stopped. Press START in the video panel to begin detection and tracking.")
+    except Exception as e:
+        st.error(f"Webcam initialization failed: {e}")
+        st.info("Check that streamlit-webrtc is installed and that your browser has camera permission.")
+
+
+# -----------------------------------------------------------------------------
 # Button Event Handling
 # -----------------------------------------------------------------------------
 if btn_start:
@@ -562,7 +701,7 @@ if btn_stop:
 # -----------------------------------------------------------------------------
 # Real-Time Processing Loop
 # -----------------------------------------------------------------------------
-if st.session_state.is_running:
+if st.session_state.is_running and source_type != "Webcam":
     # 1. Initialize detector for selected model variant (cached singleton)
     try:
         detector = get_cached_detector(selected_model_path)
@@ -574,16 +713,11 @@ if st.session_state.is_running:
     # 2. Open Video Stream
     cap = None
     try:
-        if source_type == "Webcam":
-            cap = cv2.VideoCapture(int(webcam_index), cv2.CAP_DSHOW if os.name == 'nt' else cv2.CAP_ANY)
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(int(webcam_index))
-        else:
-            if not video_path or not os.path.exists(video_path):
-                st.error("Invalid video path. Please select or upload a valid file.")
-                st.session_state.is_running = False
-                st.stop()
-            cap = cv2.VideoCapture(video_path)
+        if not video_path or not os.path.exists(video_path):
+            st.error("Invalid video path. Please select or upload a valid file.")
+            st.session_state.is_running = False
+            st.stop()
+        cap = cv2.VideoCapture(video_path)
 
         if not cap or not cap.isOpened():
             st.error("Failed to open video source. Ensure camera or file is available.")
