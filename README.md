@@ -1,139 +1,470 @@
-# OBJECT VISION: Intelligent Object Detection & Multi-Object Tracking
+# 🚀 OBJECT VISION
+### Intelligent Object Detection & Multi-Object Tracking System
 
-A professional, real-time Computer Vision SaaS-grade dashboard integrating **Ultralytics YOLO** (supporting both **YOLOv8n** and **YOLOv8s**) with an enhanced **Class-Aware SORT (Simple Online and Realtime Tracking)** algorithm. Designed to deliver smooth, high-precision detection and tracking on standard Windows laptops without UI lockups, excessive CPU/RAM consumption, or thermal throttling.
+<p align="center">
+  <b>Real-Time Computer Vision | YOLOv8 | OpenCV | SORT Tracking | Streamlit</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" />
+  <img src="https://img.shields.io/badge/YOLOv8-Ultralytics-purple" />
+  <img src="https://img.shields.io/badge/OpenCV-Computer%20Vision-green?logo=opencv" />
+  <img src="https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit" />
+  <img src="https://img.shields.io/badge/Tracking-SORT-orange" />
+  <img src="https://img.shields.io/badge/Status-Active-success" />
+</p>
 
 ---
 
-## 🌟 Key System Capabilities
+## 📌 Overview
 
-### 1. Professional Dark AI Dashboard
-- **Design System**: Palette inspired by modern developer platforms:
-  - Background: `#0B1020`
-  - Sidebar: `#111827` (Width ~250px)
-  - Cards: `#161F32`
-  - Accents: `#38BDF8` (Sky) & `#818CF8` (Indigo)
-  - Success/Live: `#22C55E`
-  - Border: `#273449`
-- **Structured Typography**: Strict hierarchy (Main Title: 28px, Section Headings: 18px, Metric Values: 26px, Card Titles: 13px, Descriptions: 13px).
-- **Two-Column Dashboard**: Collapsible sidebar controls paired with a maximum 1200px main content container.
-- **Centered 800px Video Viewport**: Subtle border, dark container, preserving natural aspect ratio without video distortion.
-- **Real-Time Detection Table**: Dynamic breakdown table (`Object Class | Count | Tracking IDs`).
-- **Live Performance Status**: Instantaneous FPS, YOLO latency, processing resolution, active model variant, and compute device.
+**OBJECT VISION** is an intelligent real-time object detection and multi-object tracking application built using Python, OpenCV, Ultralytics YOLOv8, and the SORT (Simple Online and Realtime Tracking) algorithm.
 
-### 2. Multi-Model Architecture (YOLOv8n & YOLOv8s)
-- **Supported Models**:
-  - `YOLOv8n (Nano)`: 6.25 MB weights, ultra-lightweight, 57.8 ms CPU latency (~17.3 pure inference FPS / 54+ live tracking FPS). Recommended for CPU hardware.
-  - `YOLOv8s (Small)`: 22.5 MB weights, higher capacity, 135.6 ms CPU latency. Ideal when GPU acceleration is available.
-- **Single-Load Caching**: Models are loaded once and cached in memory; switching between models takes effect immediately without reloading weights inside the frame loop.
-- **Full-Frame Letterboxing**: Operates on full frames (imgsz 640 default) without center cropping or spatial gating.
+The system detects multiple objects in video streams, identifies their classes, assigns unique tracking IDs, and maintains their identities across consecutive frames.
 
-### 3. Class-Aware SORT Tracking
-- **Kalman Filter**: 7-state motion model ($\mathbf{x} = [u, v, s, r, \dot{u}, \dot{v}, \dot{s}]^T$) providing constant-velocity bounding box trajectory prediction.
-- **Class-Aware Hungarian Matching**: Cross-class matches are strictly disallowed ($C(i, j) = 0$ if $\text{class}_i \neq \text{class}_j$), eliminating class-flipping identity switches.
-- **Duplicate Track Suppression**: Overlapping candidate tracks ($\text{IoU} > 0.70$) of the same class are rejected to prevent duplicate bounding boxes.
-- **Frame-Skipping Continuity**: Active tracks are smoothly propagated on skipped frames ($N-1$ out of $N$), cutting deep learning compute by 66% while sustaining continuous, jitter-free bounding box rendering.
+It integrates two pretrained YOLOv8 models:
+
+- **YOLOv8n (Nano):** Lightweight model optimized for faster CPU inference.
+- **YOLOv8s (Small):** Larger model offering an alternative detection configuration.
+
+The application features a professional Streamlit dashboard with video processing, detection visualization, tracking statistics, model selection, and performance monitoring.
+
+The primary objective is to provide an efficient and interactive computer vision system that can run on standard laptops without requiring dedicated GPU hardware.
+
+---
+
+## ✨ Key Features
+
+### 1. Real-Time Object Detection
+
+- Integration with Ultralytics YOLOv8.
+- Support for YOLOv8n and YOLOv8s.
+- Detection of multiple objects in a single frame.
+- Class labels and confidence scores.
+- Bounding box visualization.
+- Full-frame detection without intentional center cropping.
+
+### 2. Multi-Object Tracking
+
+- Custom Class-Aware SORT tracking implementation.
+- Unique tracking IDs for detected objects.
+- Kalman Filter-based motion prediction.
+- Hungarian Algorithm for data association.
+- Intersection over Union (IoU)-based matching.
+- Track management across consecutive frames.
+- Duplicate track suppression.
+
+### 3. Professional AI Dashboard
+
+- Interactive Streamlit interface.
+- Model selection through the sidebar.
+- Video processing interface.
+- Real-time object detection visualization.
+- Object class and tracking ID information.
+- Detection statistics.
+- FPS and inference latency monitoring.
+- Processing resolution and compute device information.
+
+### 4. Performance Optimization
+
+- Model caching to avoid unnecessary model loading.
+- Frame-skipping optimization.
+- Track propagation during skipped detection frames.
+- Lightweight YOLOv8n option for CPU systems.
+- Performance benchmarking between model variants.
+
+### 5. Testing and Validation
+
+- Automated system testing.
+- Real-video tracking tests.
+- Video pipeline testing.
+- Model benchmarking.
+- Memory and pipeline stability checks.
+
+---
+
+## 🧠 System Architecture
+
+The project follows a modular architecture in which detection, tracking, visualization, and application management are handled separately.
+
+```text
+                 INPUT VIDEO
+                      |
+                      |
+               VIDEO FRAME
+                      |
+                      |
+              OPENCV PROCESSING
+                      |
+                      |
+              YOLOv8 DETECTION
+                /          \
+               /            \
+          YOLOv8n          YOLOv8s
+               \            /
+                \          /
+                      |
+                      |
+               DETECTION BOXES
+                      |
+                      |
+              CLASS-AWARE SORT
+                      |
+             -------------------
+             |        |        |
+          Kalman   Hungarian  IoU
+          Filter   Matching   Matching
+             |        |        |
+             -------------------
+                      |
+                      |
+               TRACKING IDS
+                      |
+                      |
+             VISUALIZATION
+                      |
+                      |
+              STREAMLIT UI
+                      |
+                      |
+              FINAL OUTPUT
+```
+
+---
+
+## 🔬 Technologies Used
+
+| Technology | Purpose |
+|---|---|
+| Python | Core programming language |
+| Ultralytics YOLOv8 | Object detection |
+| OpenCV | Video and image processing |
+| PyTorch | Deep learning framework |
+| NumPy | Numerical operations |
+| SciPy | Hungarian assignment algorithm |
+| FilterPy | Kalman Filter implementation |
+| Streamlit | Interactive dashboard |
+| Pandas | Data and statistics handling |
+
+---
+
+## ⚙️ Detection Models
+
+The application supports two pretrained YOLOv8 model variants.
+
+### YOLOv8n – Nano
+
+- Lightweight architecture.
+- Lower computational requirements.
+- Suitable for CPU-based systems.
+- Recommended for faster processing.
+
+### YOLOv8s – Small
+
+- Larger model architecture.
+- Alternative detection configuration.
+- Higher computational requirements.
+- Suitable when additional processing resources are available.
+
+### Model Comparison
+
+The following are results from the project's reported CPU benchmarking experiment.
+
+| Metric | YOLOv8n | YOLOv8s |
+|---|---:|---:|
+| Model Size | 6.25 MB | 22.5 MB |
+| Average CPU Latency | 57.8 ms | 135.6 ms |
+| Pure Inference FPS | 17.3 | 7.4 |
+| Live Tracking FPS (N=3) | 54.2 | 21.8 |
+| Average Detections/Frame | 3.16 | 3.48 |
+
+**Benchmark configuration:**
+- Video: `pedestrian_bus_demo.mp4`
+- Resolution: 640 × 640
+- Backend: CPU
+
+*Note: These are machine-specific benchmark observations, not guaranteed performance on every device. Live FPS and inference FPS measure different processing stages.*
+
+**Recommended Model:** YOLOv8n for CPU-based environments.
+
+---
+
+## 🎯 Object Tracking Methodology
+
+OBJECT VISION uses a Class-Aware SORT implementation to maintain object identities across video frames.
+
+### 1. Kalman Filter
+
+The Kalman Filter predicts the future position of an object using its previous motion information.
+
+The tracking state is represented as:
+
+```text
+x = [u, v, s, r, du, dv, ds]ᵀ
+```
+
+Where:
+
+- `u`: Horizontal center position.
+- `v`: Vertical center position.
+- `s`: Bounding box scale.
+- `r`: Bounding box aspect ratio.
+- `du`: Horizontal velocity.
+- `dv`: Vertical velocity.
+- `ds`: Scale velocity.
+
+### 2. Hungarian Algorithm
+
+The Hungarian Algorithm performs optimal assignment between predicted tracks and newly detected objects.
+
+It helps associate detections with existing object trajectories.
+
+### 3. IoU Matching
+
+Intersection over Union measures the overlap between two bounding boxes.
+
+```text
+IoU = Intersection Area / Union Area
+```
+
+It helps determine whether a detection corresponds to an existing track.
+
+### 4. Class-Aware Matching
+
+The custom tracking implementation restricts matching between objects of different classes.
+
+This reduces incorrect associations between objects belonging to different categories.
+
+### 5. Frame Skipping
+
+To reduce computational overhead, the system can skip selected detection frames while propagating existing tracks.
+
+This allows tracking visualization to continue between detection updates.
 
 ---
 
 ## 📁 Project Structure
 
-```
-d:\detection\
-│
-├── app.py                      # Professional Streamlit AI Dashboard
-├── detector.py                 # Multi-model YOLOv8 wrapper (singleton caching)
-├── tracker.py                  # Object tracker, trajectory & statistics manager
-├── sort.py                     # Class-Aware SORT (Kalman Filter + Hungarian)
-├── config.py                   # Centralized configuration & design system
-├── benchmark_models.py         # Comparative benchmark suite (YOLOv8n vs YOLOv8s)
-├── generate_sample_video.py    # Synthetic video generator for offline testing
-├── test_system.py              # Automated 6-stage unit and integration test suite
-├── test_real_tracking.py       # End-to-end real video multi-object tracking test
-├── test_video_pipeline.py      # Memory leak & pipeline stability validation
-├── requirements.txt            # Project dependencies
-├── README.md                   # Documentation & academic explanations
+```text
+CodeAlpha_ObjectDetectionAndTracking/
 │
 ├── models/
-│   ├── yolov8n.pt              # YOLOv8n pretrained weights (6.25 MB)
-│   └── yolov8s.pt              # YOLOv8s pretrained weights (22.5 MB)
+│   ├── yolov8n.pt
+│   └── yolov8s.pt
 │
 ├── utils/
 │   ├── __init__.py
-│   ├── visualization.py        # High-contrast boxes, labels, HUD, corner brackets
-│   └── performance.py          # FPS calculation & latency profiling
+│   ├── visualization.py
+│   └── performance.py
 │
-├── sample_videos/              # Preloaded sample clips (e.g. pedestrian_bus_demo.mp4)
-└── output/                     # Test outputs and validation artifacts
+├── sample_videos/
+│   ├── pedestrian_bus_demo.mp4
+│   ├── sample_traffic_test.mp4
+│   └── test_bus.jpg
+│
+├── output/
+│
+├── app.py
+├── detector.py
+├── tracker.py
+├── sort.py
+├── config.py
+│
+├── benchmark_models.py
+├── generate_sample_video.py
+│
+├── test_real_tracking.py
+├── test_system.py
+├── test_video_pipeline.py
+│
+├── requirements.txt
+├── howToRun.txt
+├── .gitignore
+└── README.md
 ```
 
----
+### Main Components
 
-## 🔬 Empirical Model Comparison: YOLOv8n vs YOLOv8s
-
-Benchmarked on test video (`sample_videos/pedestrian_bus_demo.mp4`, 640x640 resolution, CPU backend):
-
-| Metric | YOLOv8n (Nano) | YOLOv8s (Small) | Analysis |
-| :--- | :--- | :--- | :--- |
-| **Model Size** | 6.25 MB | 22.5 MB | Nano has a 72% smaller footprint |
-| **Avg CPU Latency** | **57.8 ms** | 135.6 ms | **Nano is 2.3x faster** on CPU |
-| **Pure Inference FPS** | **17.3 FPS** | 7.4 FPS | Nano sustains real-time speed on CPU |
-| **Live Tracking FPS (N=3)** | **54.2 FPS** | 21.8 FPS | Nano maintains high fluidity |
-| **RAM Allocation** | 176.7 MB | 68.8 MB | Both fit comfortably in laptop RAM |
-| **Avg Detections/Frame** | 3.16 | 3.48 | Small detects slightly more occluded features |
-| **Practical Verdict** | **Recommended Default** | High-Accuracy Option | Both available in sidebar selector |
-
----
-
-## 🧠 Model Fine-Tuning Analysis
-
-An audit of the workspace confirmed that **no custom labeled dataset exists** in the directory (`d:\detection`). In adherence to rigorous academic standards:
-- No artificial training data was fabricated, and no claim of custom fine-tuning is made.
-- The system employs official Ultralytics weights pretrained on the comprehensive 80-class MS COCO dataset (>118,000 labeled images).
-
-### Fine-Tuning Procedure (When Custom Labeled Data is Available)
-To fine-tune YOLO on a custom domain:
-1. **Prepare Dataset**:
-   ```
-   dataset/
-   ├── data.yaml
-   ├── images/
-   │   ├── train/
-   │   └── val/
-   └── labels/
-       ├── train/
-       └── val/
-   ```
-2. **Execute Transfer Learning**:
-   ```powershell
-   yolo detect train data=data.yaml model=models/yolov8n.pt epochs=50 imgsz=640 patience=10 device=cpu
-   ```
-3. **Evaluation Metrics**:
-   - $\text{Precision} = \frac{TP}{TP + FP}$
-   - $\text{Recall} = \frac{TP}{TP + FN}$
-   - $\text{mAP@50}$ and $\text{mAP@50-95}$
-   - Confusion Matrix for cross-class misclassification analysis.
+| File | Description |
+|---|---|
+| `app.py` | Main Streamlit application |
+| `detector.py` | YOLOv8 detection and model management |
+| `tracker.py` | Tracking management and statistics |
+| `sort.py` | Class-Aware SORT implementation |
+| `config.py` | Centralized configuration |
+| `visualization.py` | Bounding boxes and visual elements |
+| `performance.py` | FPS and latency monitoring |
+| `benchmark_models.py` | YOLOv8n and YOLOv8s benchmarking |
+| `generate_sample_video.py` | Synthetic sample video generation |
+| `test_system.py` | Automated system tests |
+| `test_real_tracking.py` | Real-video tracking validation |
+| `test_video_pipeline.py` | Video pipeline stability testing |
 
 ---
 
-## 🚀 Execution Commands (Windows)
+## 💻 Installation and Setup
 
-### 1. Launch the Application
+### Prerequisites
+
+Make sure you have installed:
+
+- Python 3.10 or later.
+- Git.
+- VS Code (recommended).
+- Basic knowledge of Python.
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/vu241fa04f93/CodeAlpha_ObjectDetectionAndTracking.git
+```
+
+### Step 2: Navigate to the Project
+
+```bash
+cd CodeAlpha_ObjectDetectionAndTracking
+```
+
+### Step 3: Create a Virtual Environment
+
+```bash
+python -m venv venv
+```
+
+### Step 4: Activate the Environment
+
+**Windows:**
+
 ```powershell
+venv\Scripts\activate
+```
+
+**Linux/macOS:**
+
+```bash
+source venv/bin/activate
+```
+
+### Step 5: Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Step 6: Launch the Application
+
+```bash
 streamlit run app.py
 ```
-Access the dashboard at `http://localhost:8501`.
 
-### 2. Run the Benchmark Comparison
-```powershell
-python benchmark_models.py
+Open your browser and visit:
+
+```text
+http://localhost:8501
 ```
 
-### 3. Run the Automated System Verification Tests
-```powershell
+---
+
+## 🧪 Testing and Benchmarking
+
+The project includes multiple testing scripts to evaluate system functionality.
+
+### Run System Tests
+
+```bash
 python test_system.py
 ```
 
-### 4. Run the Real Video Tracking Test
-```powershell
+### Run Real-Video Tracking Tests
+
+```bash
 python test_real_tracking.py
 ```
+
+### Run Video Pipeline Tests
+
+```bash
+python test_video_pipeline.py
+```
+
+### Run Model Benchmarking
+
+```bash
+python benchmark_models.py
+```
+
+These scripts help evaluate detection, tracking, processing performance, and pipeline stability.
+
+---
+
+## 📊 Applications
+
+OBJECT VISION demonstrates computer vision techniques that can be applied to:
+
+- Smart traffic monitoring.
+- Pedestrian detection.
+- Vehicle tracking.
+- Surveillance systems.
+- Crowd monitoring.
+- Intelligent video analytics.
+- Real-time object monitoring.
+
+---
+
+## ⚠️ Current Limitations
+
+- Detection accuracy depends on the pretrained model and input video quality.
+- CPU-based processing can limit inference speed.
+- Tracking performance depends on detection quality and object movement.
+- Occlusion and rapid movement can affect tracking consistency.
+- Remote hosting environments may have limited CPU, memory, and processing resources.
+- Local webcam access does not automatically transfer to a remotely hosted application.
+
+---
+
+## 🔮 Future Improvements
+
+- Browser-based webcam integration.
+- GPU acceleration.
+- Advanced tracking with Deep SORT or ByteTrack.
+- Improved object re-identification.
+- Custom dataset training and fine-tuning.
+- Detection analytics and downloadable reports.
+- Improved multi-object tracking under occlusion.
+- Cloud-based video processing.
+
+---
+
+## 👨‍💻 Developer
+
+**Abhishek Kumar**
+
+B.Tech – Computer Science and Engineering
+
+Vignan's Foundation for Science, Technology and Research (VFSTR)
+
+### Connect With Me
+
+- GitHub: [@vu241fa04f93](https://github.com/vu241fa04f93)
+
+---
+
+## 🏆 Project Information
+
+**Project:** OBJECT VISION – Intelligent Object Detection & Multi-Object Tracking
+
+**Organization:** CodeAlpha
+
+**Domain:** Artificial Intelligence and Computer Vision
+
+**Task:** Object Detection and Tracking
+
+**Repository:** [CodeAlpha_ObjectDetectionAndTracking](https://github.com/vu241fa04f93/CodeAlpha_ObjectDetectionAndTracking)
+
+---
+
+<p align="center">
+  <b>Built with Python, Computer Vision and Artificial Intelligence.</b>
+  <br>
+  ⭐ If you find this project interesting, consider giving it a star!
+</p>
