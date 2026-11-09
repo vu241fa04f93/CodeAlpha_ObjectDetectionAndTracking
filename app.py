@@ -660,21 +660,53 @@ if source_type == "Webcam":
             )
             st.session_state.webcam_processor_key = processor_key
 
+        # Metered TURN credentials are stored in Streamlit Cloud Secrets.
+        # Local development can use the same [webrtc] section in .streamlit/secrets.toml.
+        turn_username = st.secrets["webrtc"]["username"]
+        turn_credential = st.secrets["webrtc"]["credential"]
+
+        rtc_configuration = {
+            "iceServers": [
+                {"urls": ["stun:stun.relay.metered.ca:80"]},
+                {
+                    "urls": ["turn:global.relay.metered.ca:80"],
+                    "username": turn_username,
+                    "credential": turn_credential,
+                },
+                {
+                    "urls": ["turn:global.relay.metered.ca:80?transport=tcp"],
+                    "username": turn_username,
+                    "credential": turn_credential,
+                },
+                {
+                    "urls": ["turn:global.relay.metered.ca:443"],
+                    "username": turn_username,
+                    "credential": turn_credential,
+                },
+                {
+                    "urls": ["turns:global.relay.metered.ca:443?transport=tcp"],
+                    "username": turn_username,
+                    "credential": turn_credential,
+                },
+            ]
+        }
+
         with st.container():
             webrtc_ctx = webrtc_streamer(
                 key="object-vision-browser-webcam",
                 video_frame_callback=st.session_state.webcam_processor.process,
                 media_stream_constraints={"video": True, "audio": False},
-                rtc_configuration={
-                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-                },
+                rtc_configuration=rtc_configuration,
                 async_processing=True
             )
         if not webrtc_ctx.state.playing:
             st.caption("Camera is currently stopped. Press START in the video panel to begin detection and tracking.")
     except Exception as e:
         st.error(f"Webcam initialization failed: {e}")
-        st.info("Check that streamlit-webrtc is installed and that your browser has camera permission.")
+        st.info(
+            'Check Streamlit Secrets: [webrtc] must contain non-empty '
+            'username and credential values from your Metered TURN credential.'
+        )
 
 
 # -----------------------------------------------------------------------------
